@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "DataMin3r.sln"
+    "dotnet.defaultSolution": "DATAMIN3R.sln"
 }
