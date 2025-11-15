@@ -11,12 +11,15 @@ public class GridPlacementSystem : MonoBehaviour
     [Tooltip("Camera used to convert mouse position to world space. Defaults to Camera.main if null.")]
     public Camera worldCamera;
 
-    // ===================== PREFABS & VISUALS =====================
-    [Header("Placement Prefabs")]
-    [Tooltip("Prefab that will be spawned and placed onto the grid.")]
-    public GameObject placeablePrefab;
+    [Tooltip("Inventory that defines which blocks exist and which one is selected.")]
+    public BuildInventory buildInventory;
 
-    [Tooltip("Ghost/preview prefab (can be the same as the placeable prefab).")]
+    // ===================== PREFABS & VISUALS =====================
+    [Header("Placement Prefabs (Fallbacks)")]
+    [Tooltip("Fallback prefab to place if no BuildInventory is assigned. Should have PlaceableObject on it.")]
+    public GameObject placeablePrefab;   // for quick testing without inventory
+
+    [Tooltip("Ghost/preview prefab (usually a 1x1 highlight sprite).")]
     public GameObject previewPrefab;
 
     [Tooltip("Optional parent transform for all placed objects. Leave null to keep them at root.")]
@@ -88,8 +91,8 @@ public class GridPlacementSystem : MonoBehaviour
     private Vector2Int dragStartCell;
     private HashSet<Vector2Int> cellsModifiedThisDrag = new HashSet<Vector2Int>();
 
-    // area preview objects (used for both line & rectangle)
-    private readonly List<GameObject> currentAreaPreviews = new List<GameObject>();
+    // area preview pool (used for both line & rectangle)
+    private readonly List<GameObject> areaPreviewPool = new List<GameObject>();
 
     void Start()
     {
@@ -134,6 +137,32 @@ public class GridPlacementSystem : MonoBehaviour
         HandlePlacementAndErasing();
     }
 
+    // ===================== HELPERS: CURRENT BLOCK =====================
+
+    private PlaceableObject GetCurrentPlaceableDefinition()
+    {
+        // Prefer inventory-selected block
+        if (buildInventory != null && buildInventory.SelectedBlock != null &&
+            buildInventory.SelectedBlock.placeablePrefab != null)
+        {
+            return buildInventory.SelectedBlock.placeablePrefab;
+        }
+
+        // Fallback to single prefab field
+        if (placeablePrefab != null)
+        {
+            return placeablePrefab.GetComponent<PlaceableObject>();
+        }
+
+        return null;
+    }
+
+    private GameObject GetCurrentPlaceablePrefabGO()
+    {
+        var def = GetCurrentPlaceableDefinition();
+        return def != null ? def.gameObject : null;
+    }
+
     // ===================== HELPERS: KEYBINDS =====================
     private bool IsKeyHeld(KeyCode primary, KeyCode alt)
     {
@@ -141,9 +170,38 @@ public class GridPlacementSystem : MonoBehaviour
                (alt != KeyCode.None && Input.GetKey(alt));
     }
 
+    // ===================== AREA PREVIEW POOL =====================
+    private GameObject GetAreaPreviewInstance(int index)
+    {
+        // Grow pool if needed
+        while (areaPreviewPool.Count <= index)
+        {
+            GameObject inst = Instantiate(previewPrefab);
+            var rend = inst.GetComponentInChildren<SpriteRenderer>();
+            if (rend != null)
+            {
+                rend.sortingOrder = previewSortingOrder;
+            }
+            inst.SetActive(false);
+            areaPreviewPool.Add(inst);
+        }
+        return areaPreviewPool[index];
+    }
+
+    private void DeactivateAllAreaPreviews()
+    {
+        for (int i = 0; i < areaPreviewPool.Count; i++)
+        {
+            if (areaPreviewPool[i] != null && areaPreviewPool[i].activeSelf)
+                areaPreviewPool[i].SetActive(false);
+        }
+    }
+
     // ===================== PREVIEW / HOVER LOGIC =====================
     private void HandlePreview()
     {
+        PlaceableObject currentDef = GetCurrentPlaceableDefinition();
+
         bool showRectPreview = (isPlacingDrag && rectPlacementMode) ||
                                (isErasingDrag && rectEraseMode);
 
@@ -157,7 +215,7 @@ public class GridPlacementSystem : MonoBehaviour
             if (!TryGetMouseWorldOnGridPlane(out mouseWorld))
             {
                 SetPreviewVisible(false);
-                DestroyCurrentAreaPreviews();
+                DeactivateAllAreaPreviews();
                 return;
             }
 
@@ -165,7 +223,7 @@ public class GridPlacementSystem : MonoBehaviour
             if (!WorldToCell(mouseWorld, out cellX, out cellY))
             {
                 SetPreviewVisible(false);
-                DestroyCurrentAreaPreviews();
+                DeactivateAllAreaPreviews();
                 return;
             }
 
@@ -181,12 +239,15 @@ public class GridPlacementSystem : MonoBehaviour
             if (isPlacingDrag && rectPlacementMode)
             {
                 bool allFree = true;
-                foreach (var c in rectCells)
+                if (currentDef != null)
                 {
-                    if (IsCellOccupied(c.x, c.y))
+                    foreach (var anchor in rectCells)
                     {
-                        allFree = false;
-                        break;
+                        if (!CanPlaceAtAnchorCell(anchor, currentDef))
+                        {
+                            allFree = false;
+                            break;
+                        }
                     }
                 }
 
@@ -198,21 +259,22 @@ public class GridPlacementSystem : MonoBehaviour
                 areaColor = previewBlockedColor;
             }
 
-            // rebuild area previews
-            DestroyCurrentAreaPreviews();
-            foreach (var c in rectCells)
+            // Use pool instead of destroy/instantiate
+            DeactivateAllAreaPreviews();
+            for (int i = 0; i < rectCells.Count; i++)
             {
-                GameObject inst = Instantiate(previewPrefab);
+                Vector2Int c = rectCells[i];
+                GameObject inst = GetAreaPreviewInstance(i);
+                if (!inst.activeSelf) inst.SetActive(true);
+
                 var rend = inst.GetComponentInChildren<SpriteRenderer>();
                 if (rend != null)
                 {
-                    rend.sortingOrder = previewSortingOrder;
                     rend.color = areaColor;
                 }
 
                 Vector3 center = CellToWorldCenter(c.x, c.y);
                 inst.transform.position = new Vector3(center.x, center.y, placementZ);
-                currentAreaPreviews.Add(inst);
             }
 
             SetPreviewVisible(false);
@@ -226,7 +288,7 @@ public class GridPlacementSystem : MonoBehaviour
             if (!TryGetMouseWorldOnGridPlane(out mouseWorld))
             {
                 SetPreviewVisible(false);
-                DestroyCurrentAreaPreviews();
+                DeactivateAllAreaPreviews();
                 return;
             }
 
@@ -234,7 +296,7 @@ public class GridPlacementSystem : MonoBehaviour
             if (!WorldToCell(mouseWorld, out cellX, out cellY))
             {
                 SetPreviewVisible(false);
-                DestroyCurrentAreaPreviews();
+                DeactivateAllAreaPreviews();
                 return;
             }
 
@@ -246,23 +308,24 @@ public class GridPlacementSystem : MonoBehaviour
             foreach (var c in GetLineCells(dragStartCell, snappedEnd))
                 lineCells.Add(c);
 
-            DestroyCurrentAreaPreviews();
+            DeactivateAllAreaPreviews();
 
             if (isPlacingDrag && ctrlPlacementMode)
             {
                 // Per-cell colors: blue for free, red for blocked.
                 // Optionally stop preview past first blocked cell.
                 bool blockingFound = false;
+                int poolIndex = 0;
 
-                foreach (var cell in lineCells)
+                foreach (var anchor in lineCells)
                 {
                     if (!continuePastBlockedCells && blockingFound)
                         break;
 
-                    bool occupied = IsCellOccupied(cell.x, cell.y);
+                    bool canPlace = currentDef != null && CanPlaceAtAnchorCell(anchor, currentDef);
                     Color color;
 
-                    if (occupied)
+                    if (!canPlace)
                     {
                         color = previewBlockedColor;
                         blockingFound = true;
@@ -272,35 +335,36 @@ public class GridPlacementSystem : MonoBehaviour
                         color = previewCanPlaceColor;
                     }
 
-                    GameObject inst = Instantiate(previewPrefab);
+                    GameObject inst = GetAreaPreviewInstance(poolIndex++);
+                    if (!inst.activeSelf) inst.SetActive(true);
+
                     var rend = inst.GetComponentInChildren<SpriteRenderer>();
                     if (rend != null)
                     {
-                        rend.sortingOrder = previewSortingOrder;
                         rend.color = color;
                     }
 
-                    Vector3 center = CellToWorldCenter(cell.x, cell.y);
+                    Vector3 center = CellToWorldCenter(anchor.x, anchor.y);
                     inst.transform.position = new Vector3(center.x, center.y, placementZ);
-                    currentAreaPreviews.Add(inst);
                 }
             }
             else
             {
                 // Erase preview: solid red line
+                int poolIndex = 0;
                 foreach (var cell in lineCells)
                 {
-                    GameObject inst = Instantiate(previewPrefab);
+                    GameObject inst = GetAreaPreviewInstance(poolIndex++);
+                    if (!inst.activeSelf) inst.SetActive(true);
+
                     var rend = inst.GetComponentInChildren<SpriteRenderer>();
                     if (rend != null)
                     {
-                        rend.sortingOrder = previewSortingOrder;
                         rend.color = previewBlockedColor;
                     }
 
                     Vector3 center = CellToWorldCenter(cell.x, cell.y);
                     inst.transform.position = new Vector3(center.x, center.y, placementZ);
-                    currentAreaPreviews.Add(inst);
                 }
             }
 
@@ -310,7 +374,7 @@ public class GridPlacementSystem : MonoBehaviour
         }
 
         // --- Not in rect/line drag: single-cell hover preview ---
-        DestroyCurrentAreaPreviews();
+        DeactivateAllAreaPreviews();
 
         if (previewInstance == null)
             return;
@@ -329,6 +393,7 @@ public class GridPlacementSystem : MonoBehaviour
             return; // outside grid
         }
 
+        Vector2Int anchorCell = new Vector2Int(cellX2, cellY2);
         Vector3 cellCenter2 = CellToWorldCenter(cellX2, cellY2);
         previewInstance.transform.position = new Vector3(
             cellCenter2.x,
@@ -336,10 +401,10 @@ public class GridPlacementSystem : MonoBehaviour
             placementZ
         );
 
-        bool canPlace = !IsCellOccupied(cellX2, cellY2);
+        bool canSinglePlace = currentDef != null && CanPlaceAtAnchorCell(anchorCell, currentDef);
 
         SetPreviewVisible(true);
-        SetPreviewColor(canPlace ? previewCanPlaceColor : previewBlockedColor);
+        SetPreviewColor(canSinglePlace ? previewCanPlaceColor : previewBlockedColor);
     }
 
     private void SetPreviewVisible(bool visible)
@@ -358,22 +423,11 @@ public class GridPlacementSystem : MonoBehaviour
         }
     }
 
-    private void DestroyCurrentAreaPreviews()
-    {
-        if (currentAreaPreviews.Count == 0) return;
-
-        foreach (var go in currentAreaPreviews)
-        {
-            if (go != null)
-                Destroy(go);
-        }
-        currentAreaPreviews.Clear();
-    }
-
     // ===================== PLACEMENT + ERASING =====================
     private void HandlePlacementAndErasing()
     {
-        if (placeablePrefab == null)
+        PlaceableObject currentDef = GetCurrentPlaceableDefinition();
+        if (currentDef == null && placeablePrefab == null)
             return;
 
         bool lineModHeld = IsKeyHeld(lineModifierKeyPrimary, lineModifierKeyAlt);
@@ -424,7 +478,7 @@ public class GridPlacementSystem : MonoBehaviour
             {
                 // normal free painting (per-cell under cursor)
                 Vector2Int cell = new Vector2Int(cellX, cellY);
-                TryPlaceAtCellOncePerDrag(cell);
+                TryPlaceAtAnchorOncePerDrag(cell);
             }
         }
 
@@ -446,7 +500,7 @@ public class GridPlacementSystem : MonoBehaviour
                             List<Vector2Int> rectCells = GetRectCells(dragStartCell, endCell);
                             foreach (var c in rectCells)
                             {
-                                TryPlaceAtCellOncePerDrag(c);
+                                TryPlaceAtAnchorOncePerDrag(c);
                             }
                         }
                         else if (ctrlPlacementMode)
@@ -460,13 +514,13 @@ public class GridPlacementSystem : MonoBehaviour
                                 if (!continuePastBlockedCells && blockingFound)
                                     break;
 
-                                if (IsCellOccupied(c.x, c.y))
+                                if (!TryPlaceAtAnchorOncePerDrag(c))
                                 {
-                                    blockingFound = true;
-                                    continue; // do not place on top
+                                    // If it failed due to blocking, mark it
+                                    PlaceableObject def = GetCurrentPlaceableDefinition();
+                                    if (def != null && !CanPlaceAtAnchorCell(c, def))
+                                        blockingFound = true;
                                 }
-
-                                TryPlaceAtCellOncePerDrag(c);
                             }
                         }
                     }
@@ -477,7 +531,7 @@ public class GridPlacementSystem : MonoBehaviour
             ctrlPlacementMode = false;
             rectPlacementMode = false;
             cellsModifiedThisDrag.Clear();
-            DestroyCurrentAreaPreviews();
+            DeactivateAllAreaPreviews();
         }
 
         // --- RIGHT MOUSE (or custom): erase / line-erase / rect-erase ---
@@ -567,24 +621,31 @@ public class GridPlacementSystem : MonoBehaviour
             ctrlEraseMode = false;
             rectEraseMode = false;
             cellsModifiedThisDrag.Clear();
-            DestroyCurrentAreaPreviews();
+            DeactivateAllAreaPreviews();
         }
     }
 
-    private void TryPlaceAtCellOncePerDrag(Vector2Int cell)
+    // ===== PLACEMENT / ERASE HELPERS (multi-cell aware) =====
+
+    private bool TryPlaceAtAnchorOncePerDrag(Vector2Int anchorCell)
     {
-        if (cellsModifiedThisDrag.Contains(cell))
-            return;
+        if (cellsModifiedThisDrag.Contains(anchorCell))
+            return false;
 
-        cellsModifiedThisDrag.Add(cell);
+        cellsModifiedThisDrag.Add(anchorCell);
 
-        int x = cell.x;
-        int y = cell.y;
+        PlaceableObject def = GetCurrentPlaceableDefinition();
+        if (def == null) return false;
 
-        if (IsCellOccupied(x, y))
-            return;
+        // inventory check (if we have one)
+        if (buildInventory != null && !buildInventory.CanPlaceSelected(1))
+            return false;
 
-        PlaceAtCell(x, y);
+        if (!CanPlaceAtAnchorCell(anchorCell, def))
+            return false;
+
+        PlaceAtAnchorCell(anchorCell, def);
+        return true;
     }
 
     private void TryEraseCellOncePerDrag(Vector2Int cell)
@@ -608,13 +669,36 @@ public class GridPlacementSystem : MonoBehaviour
         return placedObjects[x, y] != null;
     }
 
-    private void PlaceAtCell(int cellX, int cellY)
+    private bool CanPlaceAtAnchorCell(Vector2Int anchorCell, PlaceableObject def)
     {
-        Vector3 cellCenter = CellToWorldCenter(cellX, cellY);
+        foreach (Vector2Int cell in def.GetOccupiedCells(anchorCell))
+        {
+            // inside grid bounds?
+            if (cell.x < 0 || cell.x >= gridCamera.gridWidth ||
+                cell.y < 0 || cell.y >= gridCamera.gridHeight)
+            {
+                return false;
+            }
+
+            if (def.blocksPlacement && IsCellOccupied(cell.x, cell.y))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void PlaceAtAnchorCell(Vector2Int anchorCell, PlaceableObject def)
+    {
+        GameObject prefab = GetCurrentPlaceablePrefabGO();
+        if (prefab == null) return;
+
+        // world position: assume prefab pivot is aligned to anchor cell
+        Vector3 anchorWorld = CellToWorldCenter(anchorCell.x, anchorCell.y);
 
         GameObject placed = Instantiate(
-            placeablePrefab,
-            new Vector3(cellCenter.x, cellCenter.y, placementZ),
+            prefab,
+            new Vector3(anchorWorld.x, anchorWorld.y, placementZ),
             Quaternion.identity
         );
 
@@ -623,17 +707,47 @@ public class GridPlacementSystem : MonoBehaviour
             placed.transform.SetParent(placementParent, true);
         }
 
-        placedObjects[cellX, cellY] = placed;
+        // mark all occupied cells
+        foreach (Vector2Int cell in def.GetOccupiedCells(anchorCell))
+        {
+            placedObjects[cell.x, cell.y] = placed;
+        }
+
+        // consume inventory
+        if (buildInventory != null)
+        {
+            buildInventory.TryConsumeSelected(1);
+        }
     }
 
     private void EraseAtCell(int cellX, int cellY)
     {
         GameObject obj = placedObjects[cellX, cellY];
-        if (obj != null)
+        if (obj == null) return;
+
+        // REFUND inventory once per object
+        if (buildInventory != null)
         {
-            Destroy(obj);
-            placedObjects[cellX, cellY] = null;
+            PlaceableObject po = obj.GetComponent<PlaceableObject>();
+            if (po != null && !string.IsNullOrEmpty(po.id))
+            {
+                buildInventory.AddToBlock(po.id, 1);
+            }
         }
+
+        // Clear ALL cells that reference this same object
+        for (int x = 0; x < gridCamera.gridWidth; x++)
+        {
+            for (int y = 0; y < gridCamera.gridHeight; y++)
+            {
+                if (placedObjects[x, y] == obj)
+                {
+                    placedObjects[x, y] = null;
+                }
+            }
+        }
+
+        Destroy(obj);
     }
 
     // ===================== RECTANGLE & LINE HELPERS =====================
