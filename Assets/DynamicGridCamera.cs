@@ -4,9 +4,6 @@
 [RequireComponent(typeof(Camera))]
 public class ResizableGridCamera : MonoBehaviour
 {
-    // -------------------------------------------------------------
-    //  WINDOW SIZE SETTINGS (min + max + smoothing)
-    // -------------------------------------------------------------
     [Header("Window Size Settings")]
     public int initialLaunchWidth = 480;
     public int initialLaunchHeight = 480;
@@ -17,7 +14,7 @@ public class ResizableGridCamera : MonoBehaviour
 
     [Header("Grid-based Max Window Limits")]
     [Tooltip("Extra cells of buffer around grid on each side")]
-    public int bufferCells = 1;   // 1 cell margin left/right/top/bottom
+    public int bufferCells = 1;
 
     [Tooltip("Hard pixel max per axis (0 = ignore)")]
     public int hardMaxWidth = 2048;
@@ -41,47 +38,37 @@ public class ResizableGridCamera : MonoBehaviour
     private int corrTargetW, corrTargetH;
     private float corrElapsed = 0f;
 
-    // -------------------------------------------------------------
-    //  CAMERA + GRID SETTINGS
-    // -------------------------------------------------------------
     [Header("Reference Resolution (Max Camera Size)")]
     public int referenceWidth = 1920;
     public int referenceHeight = 1080;
 
-    // How many world units tall the camera should see at referenceHeight
     public float verticalWorldSizeAtReference = 10f;
 
     [Header("Grid Settings")]
-    public int gridWidth = 20;     // number of cells horizontally
-    public int gridHeight = 20;    // number of cells vertically
-    public float cellSize = 1f;    // world units per cell
+    public int gridWidth = 20;
+    public int gridHeight = 20;
+    public float cellSize = 1f;
 
     public Color gridColor = Color.gray;
-    public Material gridMaterial;  // simple Unlit/Color material
+    public Material gridMaterial;
 
     [Header("Zoom Settings")]
     [Tooltip("1 = default scale (no zoom). 0.25 = 4x zoom in max.")]
-    public float minZoomFactor = 0.25f;   // how close you can zoom in
-    public float zoomSpeed = 0.1f;        // how fast mouse wheel zooms
+    public float minZoomFactor = 0.25f;   
+    public float zoomSpeed = 0.1f;       
 
     private Camera cam;
-    private float unitsPerPixel;          // world units per screen pixel (height)
-    private float zoomFactor = 1f;        // 1 = default, <1 = zoom in
+    private float unitsPerPixel;
+    private float zoomFactor = 1f;
 
-    // starting center of the camera (used for panning clamp)
     private Vector2 initialCenter;
 
-    // panning
     private bool isPanning = false;
     private Vector3 panStartCamPos;
     private Vector2 panStartMouseScreen;
 
-    // used by window limit logic
     public float PixelsPerCell => cellSize / unitsPerPixel;
 
-    // -------------------------------------------------------------
-    //  UNITY EVENTS
-    // -------------------------------------------------------------
     private void OnValidate()
     {
         SetupCamera();
@@ -94,7 +81,6 @@ public class ResizableGridCamera : MonoBehaviour
 
         if (Application.isPlaying)
         {
-            // Set initial size at launch
             Screen.SetResolution(initialLaunchWidth, initialLaunchHeight, FullScreenMode.Windowed);
 
             lastWinW = Screen.width;
@@ -112,7 +98,6 @@ public class ResizableGridCamera : MonoBehaviour
         if (referenceHeight <= 0)
             referenceHeight = 1080;
 
-        // world units tall at referenceHeight / pixels tall at referenceHeight
         unitsPerPixel = verticalWorldSizeAtReference / referenceHeight;
     }
 
@@ -120,29 +105,22 @@ public class ResizableGridCamera : MonoBehaviour
     {
         HandleZoomInput();
         HandlePanInput();
-        HandleWindowSizeEnforcement(); // min + max with smoothing
+        HandleWindowSizeEnforcement();
     }
 
-    // -------------------------------------------------------------
-    //  INPUT: ZOOM
-    // -------------------------------------------------------------
     private void HandleZoomInput()
     {
         float scroll = Input.mouseScrollDelta.y;
         if (Mathf.Abs(scroll) > 0.001f)
         {
-            // scroll up -> zoom in (smaller zoomFactor)
             zoomFactor -= scroll * zoomSpeed;
             zoomFactor = Mathf.Clamp(zoomFactor, minZoomFactor, 1f);
         }
     }
 
-    // -------------------------------------------------------------
-    //  INPUT: PANNING
-    // -------------------------------------------------------------
     private void HandlePanInput()
     {
-        if (Input.GetMouseButtonDown(2)) // middle mouse pressed
+        if (Input.GetMouseButtonDown(2))
         {
             isPanning = true;
             panStartCamPos = transform.position;
@@ -158,11 +136,9 @@ public class ResizableGridCamera : MonoBehaviour
             Vector2 currentMouseScreen = Input.mousePosition;
             Vector2 screenDelta = currentMouseScreen - panStartMouseScreen;
 
-            // How many world units per screen pixel (vertically)
             float worldPerPixelY = (cam.orthographicSize * 2f) / Screen.height;
             float worldPerPixelX = worldPerPixelY * cam.aspect;
 
-            // Move opposite the mouse drag
             Vector3 deltaWorld = new Vector3(
                 -screenDelta.x * worldPerPixelX,
                 -screenDelta.y * worldPerPixelY,
@@ -170,21 +146,17 @@ public class ResizableGridCamera : MonoBehaviour
             );
 
             Vector3 targetPos = panStartCamPos + deltaWorld;
-            targetPos.z = panStartCamPos.z; // never change Z
+            targetPos.z = panStartCamPos.z;
 
             transform.position = targetPos;
         }
     }
 
-    // -------------------------------------------------------------
-    //  WINDOW SIZE ENFORCEMENT (min + max + smoothing)
-    // -------------------------------------------------------------
     private void HandleWindowSizeEnforcement()
     {
         if (!Application.isPlaying)
             return;
 
-        // If we're currently animating a correction, lerp the window size
         if (correctionInProgress)
         {
             corrElapsed += Time.deltaTime;
@@ -207,10 +179,9 @@ public class ResizableGridCamera : MonoBehaviour
                 lastWinH = Screen.height;
             }
 
-            return; // don't treat this as user resize
+            return;
         }
 
-        // Detect user resizing
         if (Screen.width != lastWinW || Screen.height != lastWinH)
         {
             lastWinW = Screen.width;
@@ -224,7 +195,6 @@ public class ResizableGridCamera : MonoBehaviour
         {
             resizeIdleTimer += Time.deltaTime;
 
-            // new: only correct when they've let go of the window (no mouse buttons held)
             bool mouseReleased =
                 !Input.GetMouseButton(0) &&
                 !Input.GetMouseButton(1) &&
@@ -243,11 +213,9 @@ public class ResizableGridCamera : MonoBehaviour
         int currentW = Screen.width;
         int currentH = Screen.height;
 
-        // --- MIN LIMITS ---
         int targetW = Mathf.Max(currentW, minAllowedWidth);
         int targetH = Mathf.Max(currentH, minAllowedHeight);
 
-        // --- MAX LIMITS (grid + buffer + hard cap) ---
         float ppc = PixelsPerCell;
         if (ppc > 0f)
         {
@@ -270,16 +238,13 @@ public class ResizableGridCamera : MonoBehaviour
         }
         else
         {
-            // fallback to hard max only, if PixelsPerCell isn't ready
             if (hardMaxWidth > 0) targetW = Mathf.Min(targetW, hardMaxWidth);
             if (hardMaxHeight > 0) targetH = Mathf.Min(targetH, hardMaxHeight);
         }
 
-        // If inside all limits, nothing to do
         if (targetW == currentW && targetH == currentH)
             return;
 
-        // Start smooth correction
         correctionInProgress = true;
         corrStartW = currentW;
         corrStartH = currentH;
@@ -288,23 +253,15 @@ public class ResizableGridCamera : MonoBehaviour
         corrElapsed = 0f;
     }
 
-    // -------------------------------------------------------------
-    // CAMERA FRAMING + GRID RENDERING
-    // -------------------------------------------------------------
     private void LateUpdate()
     {
         if (cam == null) return;
 
-        // --- 1. Compute base ortho size from window height (no zoom) ---
         int effectiveHeight = Mathf.Min(Screen.height, referenceHeight);
         float baseOrthoSize = (effectiveHeight * unitsPerPixel) * 0.5f;
 
-        // --- 2. Apply zoom factor ---
         float finalOrthoSize = baseOrthoSize * zoomFactor;
         cam.orthographicSize = finalOrthoSize;
-
-        // --- 3. Constrain camera position so we never leave the
-        //         area that would be visible at zoomFactor = 1 ---
 
         float baseHalfHeight = baseOrthoSize;
         float baseHalfWidth = baseHalfHeight * cam.aspect;
@@ -312,7 +269,6 @@ public class ResizableGridCamera : MonoBehaviour
         float finalHalfHeight = finalOrthoSize;
         float finalHalfWidth = finalHalfHeight * cam.aspect;
 
-        // how far we’re allowed to move from the initial center
         float maxOffsetX = Mathf.Max(0f, baseHalfWidth - finalHalfWidth);
         float maxOffsetY = Mathf.Max(0f, baseHalfHeight - finalHalfHeight);
 
@@ -345,11 +301,9 @@ public class ResizableGridCamera : MonoBehaviour
         float totalWidth = gridWidth * cellSize;
         float totalHeight = gridHeight * cellSize;
 
-        // Center the grid around (0,0)
         float left = -totalWidth * 0.5f;
         float bottom = -totalHeight * 0.5f;
 
-        // Vertical lines
         for (int x = 0; x <= gridWidth; x++)
         {
             float xPos = left + x * cellSize;
@@ -357,7 +311,6 @@ public class ResizableGridCamera : MonoBehaviour
             GL.Vertex3(xPos, bottom + totalHeight, 0f);
         }
 
-        // Horizontal lines
         for (int y = 0; y <= gridHeight; y++)
         {
             float yPos = bottom + y * cellSize;

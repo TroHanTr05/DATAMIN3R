@@ -3,15 +3,14 @@ using UnityEngine;
 
 public class BuildInventory : MonoBehaviour
 {
-    [Header("Available Blocks")]
-    [Tooltip("All block types the player can build (Factorio-style).")]
+    [Header("Block Catalog (Designer-only)")]
+    [Tooltip("All block types the player can build (Factorio-style catalog).")]
     public List<BuildBlock> blocks = new List<BuildBlock>();
 
     [Tooltip("Index of the currently selected block in the list above.")]
     public int selectedIndex = 0;
 
-    // runtime amounts
-    private int[] currentAmounts;
+    public int BlockCount => blocks != null ? blocks.Count : 0;
 
     public BuildBlock SelectedBlock
     {
@@ -25,70 +24,17 @@ public class BuildInventory : MonoBehaviour
         }
     }
 
-    private void Awake()
+    public BuildBlock GetBlockById(string id)
     {
-        if (blocks == null)
-            blocks = new List<BuildBlock>();
+        if (blocks == null) return null;
 
-        currentAmounts = new int[blocks.Count];
-        for (int i = 0; i < blocks.Count; i++)
+        foreach (var b in blocks)
         {
-            currentAmounts[i] = blocks[i].startingAmount;
+            if (b != null && b.id == id)
+                return b;
         }
+        return null;
     }
-
-    // ====== QUERIES / CONSUMPTION ======
-
-    public bool CanPlaceSelected(int needed = 1)
-    {
-        BuildBlock block = SelectedBlock;
-        if (block == null) return false;
-
-        int idx = Mathf.Clamp(selectedIndex, 0, blocks.Count - 1);
-        int amt = currentAmounts[idx];
-
-        if (amt < 0) return true; // infinite
-        return amt >= needed;
-    }
-
-    public bool TryConsumeSelected(int amount)
-    {
-        BuildBlock block = SelectedBlock;
-        if (block == null) return false;
-
-        int idx = Mathf.Clamp(selectedIndex, 0, blocks.Count - 1);
-        int amt = currentAmounts[idx];
-
-        if (amt < 0) return true; // infinite inventory
-
-        if (amt < amount) return false;
-
-        currentAmounts[idx] -= amount;
-        return true;
-    }
-
-    /// <summary>
-    /// Add blocks by ID (used when refunding after deletion).
-    /// </summary>
-    public void AddToBlock(string id, int amount)
-    {
-        if (amount <= 0) return;
-
-        for (int i = 0; i < blocks.Count; i++)
-        {
-            if (blocks[i].id == id)
-            {
-                // infinite stock stays infinite
-                if (currentAmounts[i] < 0)
-                    return;
-
-                currentAmounts[i] += amount;
-                return;
-            }
-        }
-    }
-
-    // ====== SELECTION HELPERS (for hotbar / UI) ======
 
     public void SelectNext()
     {
@@ -105,9 +51,11 @@ public class BuildInventory : MonoBehaviour
 
     public void SelectById(string id)
     {
+        if (blocks == null) return;
+
         for (int i = 0; i < blocks.Count; i++)
         {
-            if (blocks[i].id == id)
+            if (blocks[i] != null && blocks[i].id == id)
             {
                 selectedIndex = i;
                 return;

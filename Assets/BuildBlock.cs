@@ -1,27 +1,29 @@
 using UnityEngine;
 
-[System.Serializable]
-public class BuildBlock
+[CreateAssetMenu(menuName = "Build/Build Block", fileName = "NewBuildBlock")]
+public class BuildBlock : ScriptableObject
 {
     [Header("Identity")]
-    [Tooltip("Unique ID for this block type (used by code / save system).")]
-    public string id;
+    [Tooltip("Unique ID string used for save/load & lookups.")]
+    public string id = "block_id";
 
-    [Tooltip("Human readable name for UI / tooltips.")]
-    public string displayName = "Block";
+    [Tooltip("Name shown in UI / tooltips.")]
+    public string displayName = "New Block";
 
-    [Header("Prefabs")]
-    [Tooltip("Prefab that will be spawned into the world (must have PlaceableObject on it).")]
-    public PlaceableObject placeablePrefab;
+    [TextArea]
+    [Tooltip("Optional description for UI.")]
+    public string description;
 
-    [Tooltip("Optional preview prefab. If null, the GridPlacementSystem's previewPrefab is used.")]
-    public GameObject customPreviewPrefab;
-
-    [Header("Visuals")]
-    [Tooltip("Icon for hotbar / build menu.")]
+    [Tooltip("Icon used in hotbar / inventory UI.")]
     public Sprite icon;
 
-    [Header("Inventory")]
-    [Tooltip("Starting amount. -1 means infinite / creative mode.")]
-    public int startingAmount = -1;
+    [Header("Prefabs")]
+    [Tooltip("Prefab actually placed into the world/grid.")]
+    public GameObject placeablePrefab;
+
+    [Tooltip("Optional ghost / preview prefab. If null, GridPlacementSystem can fall back to placeablePrefab.")]
+    public GameObject previewPrefab;
+
+    [Header("Category / Type (for behavior)")]
+    public PlaceableObject.PlaceableType category = PlaceableObject.PlaceableType.Generic;
 }
