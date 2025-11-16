@@ -275,9 +275,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlacementSystem
   gridCamera: {fileID: 339440942}
   worldCamera: {fileID: 0}
+  playerInventory: {fileID: 0}
   buildInventory: {fileID: 1794252142}
-  placeablePrefab: {fileID: 8011156027985253502, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
-  previewPrefab: {fileID: 8011156027985253502, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
+  fallbackPlaceablePrefab: {fileID: 0}
+  fallbackPreviewPrefab: {fileID: 0}
   placementParent: {fileID: 1704061488}
   placementZ: 0
   previewSortingOrder: 1000
@@ -442,12 +443,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildInventory
   blocks:
-  - id: 1
-    displayName: TestBlock
-    placeablePrefab: {fileID: -7972105322552088492, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
-    customPreviewPrefab: {fileID: 0}
-    icon: {fileID: 0}
-    startingAmount: 1
+  - {fileID: 11400000, guid: 4665b4f3dcc1ad6438d8ffbc9817d3f2, type: 2}
+  - {fileID: 11400000, guid: 48b1dfb0e3162344b9cb9ec156e55bb3, type: 2}
   selectedIndex: 0
 --- !u!4 &1794252143
 Transform:
@@ -476,8 +473,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec8ec6e351d115b498698c3783afa2e2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInventory
-  buildInventory: {fileID: 1794252142}
-  items: []
+  maxSlots: 9
+  maxStackSize: 99
+  slots:
+  - block: {fileID: 11400000, guid: 4665b4f3dcc1ad6438d8ffbc9817d3f2, type: 2}
+    amount: 10
+  - block: {fileID: 11400000, guid: 48b1dfb0e3162344b9cb9ec156e55bb3, type: 2}
+    amount: 10
+  selectedSlotIndex: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
