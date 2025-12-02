@@ -3,12 +3,10 @@ using UnityEngine;
 
 public class PlaceableObject : MonoBehaviour
 {
-    // ========== LINK TO BLOCK DEFINITION ==========
     [Header("Block Definition")]
     [Tooltip("Which BuildBlock definition this instance represents (used for refunds, UI, etc).")]
     public BuildBlock blockDefinition;
 
-    // ========== ID / CATEGORY ==========
     public enum PlaceableType
     {
         Generic,
@@ -28,7 +26,10 @@ public class PlaceableObject : MonoBehaviour
     [Tooltip("High-level category that can drive which options / UI are available.")]
     public PlaceableType type = PlaceableType.Generic;
 
-    // ========== GRID FOOTPRINT ==========
+    [Header("Breaking")]
+    [Tooltip("Seconds of continuous erase input required to break/pick up this block.")]
+    public float breakTimeSeconds = 0.25f;
+
     [Header("Grid Footprint")]
     [Tooltip("Size in grid cells (width = X, height = Y). 1x1 is a single tile.")]
     public Vector2Int sizeInCells = Vector2Int.one;
@@ -39,7 +40,6 @@ public class PlaceableObject : MonoBehaviour
     )]
     public Vector2Int anchorCell = Vector2Int.zero;
 
-    // ========== FLAGS / BEHAVIOR HINTS ==========
     [Header("Behavior Flags")]
     [Tooltip("If true, this object blocks other placeables from using the same cells.")]
     public bool blocksPlacement = true;
@@ -52,8 +52,6 @@ public class PlaceableObject : MonoBehaviour
 
     [Tooltip("If true, this object can be rotated in 90� steps on the grid (not wired up yet).")]
     public bool canRotate = true;
-
-    // ========== FOOTPRINT HELPERS (no rotation yet) ==========
 
     public IEnumerable<Vector2Int> GetLocalFootprint()
     {

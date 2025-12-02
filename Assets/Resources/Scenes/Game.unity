@@ -277,7 +277,7 @@ MonoBehaviour:
   worldCamera: {fileID: 0}
   playerInventory: {fileID: 1794252144}
   fallbackPlaceablePrefab: {fileID: 0}
-  fallbackPreviewPrefab: {fileID: 0}
+  fallbackPreviewPrefab: {fileID: 8011156027985253502, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
   placementParent: {fileID: 1704061488}
   placementZ: 0
   previewSortingOrder: 1000
@@ -290,6 +290,7 @@ MonoBehaviour:
   lineModifierKeyAlt: 305
   rectModifierKeyPrimary: 304
   rectModifierKeyAlt: 303
+  defaultBreakTimeSeconds: 0.25
 --- !u!1 &360808878
 GameObject:
   m_ObjectHideFlags: 0
