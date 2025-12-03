@@ -42,6 +42,11 @@ public class GridPlacementSystem : MonoBehaviour
     [Header("Line Placement Options")]
     public bool continuePastBlockedCells = true;
 
+    [Header("Feature Toggles")]
+    public bool canLineDraw = true;
+    public bool canRectDraw = true;
+    public bool canMultiQueue = true;
+
     [Header("Keybinds - Mouse Buttons")]
     [Range(0, 2)] public int placeMouseButton = 0;
     [Range(0, 2)] public int eraseMouseButton = 1;
@@ -869,12 +874,22 @@ public class GridPlacementSystem : MonoBehaviour
             return;
         }
 
-        bool lineModHeld = IsKeyHeld(lineModifierKeyPrimary, lineModifierKeyAlt);
-        bool rectModHeld = IsKeyHeld(rectModifierKeyPrimary, rectModifierKeyAlt);
-        bool rectModeHeld = lineModHeld && rectModHeld;
-        bool traceModeHeld = rectModHeld && !lineModHeld;
+        bool lineKeyHeld = IsKeyHeld(lineModifierKeyPrimary, lineModifierKeyAlt);
+        bool rectKeyHeld = IsKeyHeld(rectModifierKeyPrimary, rectModifierKeyAlt);
 
-        if (canPlace && Input.GetMouseButtonDown(placeMouseButton))
+        // Line drawing (Ctrl) is gated only by canLineDraw
+        bool lineModHeld = canLineDraw && lineKeyHeld;
+
+        // Rect drawing (Ctrl+Shift) is gated only by canRectDraw and the raw key combo,
+        // and does NOT depend on canLineDraw so it works independently.
+        bool rectModeHeld = canRectDraw && lineKeyHeld && rectKeyHeld;
+
+        // Trace (Shift-only) is considered a "line" feature and is gated by canLineDraw.
+        bool traceModeHeld = canLineDraw && rectKeyHeld && !lineKeyHeld;
+
+        bool blockPlacementDueToQueue = !canMultiQueue && isMultiEraseActive;
+
+        if (!blockPlacementDueToQueue && canPlace && Input.GetMouseButtonDown(placeMouseButton))
         {
             isPlacingDrag = true;
             isErasingDrag = false;
@@ -901,7 +916,7 @@ public class GridPlacementSystem : MonoBehaviour
             }
         }
 
-        if (canPlace && Input.GetMouseButton(placeMouseButton) && isPlacingDrag)
+        if (!blockPlacementDueToQueue && canPlace && Input.GetMouseButton(placeMouseButton) && isPlacingDrag)
         {
             Vector3 mouseWorld;
             if (!TryGetMouseWorldOnGridPlane(out mouseWorld))
