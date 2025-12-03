@@ -3,6 +3,9 @@ using UnityEngine;
 
 public class GridPlacementSystem : MonoBehaviour
 {
+    public static GridPlacementSystem Instance; // For conveyors
+    
+    
     // ===================== REFERENCES =====================
     [Header("References")]
     [Tooltip("Grid camera that defines the grid size, cell size, etc.")]
@@ -85,6 +88,8 @@ public class GridPlacementSystem : MonoBehaviour
 
     void Start()
     {
+        Instance = this; // For conveyors
+        
         if (gridCamera == null)
         {
             Debug.LogError("GridPlacementSystem: gridCamera reference is missing.");
@@ -862,4 +867,62 @@ public class GridPlacementSystem : MonoBehaviour
             }
         }
     }
+    
+    // ===================== GRID PATCH FOR CONVEYORS =====================
+    
+    // Returns true if the given grid coordinate is inside the valid grid range
+    public bool IsCellInsideGrid(Vector2Int cell)
+    {
+        return cell.x >= 0 &&
+               cell.x < gridCamera.gridWidth &&
+               cell.y >= 0 &&
+               cell.y < gridCamera.gridHeight;
+    }
+    
+    // Exposes the placedObjects array so other systems (Conveyors, Machines)
+    // can check what is occupying a cell.
+    public GameObject GetPlacedObject(Vector2Int cell)
+    {
+        if (!IsCellInsideGrid(cell))
+            return null;
+    
+        return placedObjects[cell.x, cell.y];
+    }
+    
+    // Converts a world position into the grid cell index.
+    // Wrapper version of WorldToCell for convenience.
+    public Vector2Int WorldToCellPosition(Vector3 worldPosition)
+    {
+        int cx, cy;
+        if (WorldToCell(worldPosition, out cx, out cy))
+            return new Vector2Int(cx, cy);
+    
+        return new Vector2Int(-9999, -9999); // invalid cell indicator
+    }
+
+    public bool IsInsideGrid(Vector2Int cell)
+    {
+        return cell.x >= 0 &&
+               cell.x < gridCamera.gridWidth &&
+               cell.y >= 0 &&
+               cell.y < gridCamera.gridHeight;
+    }
+
+    public GameObject GetObjectAtCell(Vector2Int cell)
+    {
+        if (!IsInsideGrid(cell))
+            return null;
+
+        return placedObjects[cell.x, cell.y];
+    }
+
+    public Vector2Int CellFromWorld(Vector3 worldPosition)
+    {
+        int cx, cy;
+        if (WorldToCell(worldPosition, out cx, out cy))
+            return new Vector2Int(cx, cy);
+
+        return new Vector2Int(-1, -1);  // invalid
+    }
+    
 }

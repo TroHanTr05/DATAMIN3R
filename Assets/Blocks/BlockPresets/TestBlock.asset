@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d20d695c412288a4a9b064c2f0c687a0, type: 3}
   m_Name: TestBlock
   m_EditorClassIdentifier: Assembly-CSharp::BuildBlock
+  powerDrain: 10
+  powerGeneration: 0
   id: 001
   displayName: TestBlock
   description: A simple placement test cube

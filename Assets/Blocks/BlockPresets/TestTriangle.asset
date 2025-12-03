@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d20d695c412288a4a9b064c2f0c687a0, type: 3}
   m_Name: TestTriangle
   m_EditorClassIdentifier: Assembly-CSharp::BuildBlock
+  powerDrain: 0
+  powerGeneration: 100
   id: 002
   displayName: TestTriangle
   description: A simple placement test triangle
@@ -19,3 +21,8 @@ MonoBehaviour:
   placeablePrefab: {fileID: 3286700495547983433, guid: f37011cf804c74b4cb9d06b77f5390e8, type: 3}
   previewPrefab: {fileID: 3286700495547983433, guid: f37011cf804c74b4cb9d06b77f5390e8, type: 3}
   category: 0
+  tickRate: 1
+  outputItemId: 
+  inputItemId: 
+  inputAmount: 1
+  outputAmount: 1

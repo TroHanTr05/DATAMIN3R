@@ -53,7 +53,16 @@ public class BuildBlock : ScriptableObject
         {
             case PlaceableObject.PlaceableType.Miner:
                 // Example: Miner produces resources
-                Debug.Log($"{displayName} mined {outputAmount} of {outputItemId}");
+                // Debug.Log($"{displayName} mined {outputAmount} of {outputItemId}"); (moving to functionality)
+                var po = instance;
+                
+                if (po.outputBuffer == null)
+                {
+                    // create 1 item
+                    Item minedItem = ItemDatabase.GetItem(outputItemId);
+                    po.outputBuffer = new ItemStack(minedItem, 1);
+                }
+                po.TryOutputToConveyor();
                 break;
 
             case PlaceableObject.PlaceableType.Crafter:

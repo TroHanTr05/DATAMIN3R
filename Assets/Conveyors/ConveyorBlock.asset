@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d20d695c412288a4a9b064c2f0c687a0, type: 3}
+  m_Name: ConveyorBlock
+  m_EditorClassIdentifier: Assembly-CSharp::BuildBlock
+  powerDrain: 0.1
+  powerGeneration: 0
+  id: 003
+  displayName: ConveyorBlock
+  description: Conveyor Belt
+  icon: {fileID: 0}
+  placeablePrefab: {fileID: 7518936388542600754, guid: ff60adf98f08232428a92b3dca427724, type: 3}
+  previewPrefab: {fileID: 7518936388542600754, guid: ff60adf98f08232428a92b3dca427724, type: 3}
+  category: 2
+  tickRate: 1
+  outputItemId: 
+  inputItemId: 
+  inputAmount: 1
+  outputAmount: 1
