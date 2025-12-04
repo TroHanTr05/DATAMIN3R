@@ -11,6 +11,9 @@ public class GridPlacementSystem : MonoBehaviour
     [Tooltip("Camera used to convert mouse position to world space. Defaults to Camera.main if null.")]
     public Camera worldCamera;
 
+    [Tooltip("Central power system that tracks net power from placed blocks.")]
+    public PowerHandler powerHandler;
+
     [Header("Inventory / Catalog")]
     [Tooltip("Runtime player inventory with counts per block.")]
     public PlayerInventory playerInventory;
@@ -62,6 +65,27 @@ public class GridPlacementSystem : MonoBehaviour
 
     private GameObject[,] placedObjects;
 
+    /// <summary>
+    /// Returns the PlaceableObject at the given grid cell, or null if none.
+    /// </summary>
+    public PlaceableObject GetPlaceableAtCell(int cellX, int cellY)
+    {
+        if (placedObjects == null)
+            return null;
+
+        int width = placedObjects.GetLength(0);
+        int height = placedObjects.GetLength(1);
+
+        if (cellX < 0 || cellX >= width || cellY < 0 || cellY >= height)
+            return null;
+
+        GameObject obj = placedObjects[cellX, cellY];
+        if (obj == null)
+            return null;
+
+        return obj.GetComponent<PlaceableObject>();
+    }
+
     private float totalWidth;
     private float totalHeight;
     private float left;
@@ -85,6 +109,15 @@ public class GridPlacementSystem : MonoBehaviour
 
     private readonly List<GameObject> areaPreviewPool = new List<GameObject>();
     private readonly Dictionary<GameObject, Color> eraseHighlightOriginalColors = new Dictionary<GameObject, Color>();
+
+    // Rotation state for preview & placed blocks (0,90,180,270 degrees clockwise)
+    private int currentRotationIndex = 0;
+    private static readonly Quaternion[] rotationTable = {
+        Quaternion.Euler(0,0,0),
+        Quaternion.Euler(0,0,90),
+        Quaternion.Euler(0,0,180),
+        Quaternion.Euler(0,0,270)
+    };
 
     [Header("Build / Break Settings")]
     [Tooltip("Default build time in seconds if a placeable doesn't define its own build time.")]
@@ -130,6 +163,15 @@ public class GridPlacementSystem : MonoBehaviour
             }
         }
 
+        if (powerHandler == null)
+        {
+            powerHandler = FindObjectOfType<PowerHandler>();
+            if (powerHandler == null)
+            {
+                Debug.LogWarning("GridPlacementSystem: No PowerHandler found. Power will not be tracked for placed blocks.");
+            }
+        }
+
         totalWidth = gridCamera.gridWidth * gridCamera.cellSize;
         totalHeight = gridCamera.gridHeight * gridCamera.cellSize;
 
@@ -143,6 +185,15 @@ public class GridPlacementSystem : MonoBehaviour
 
     void Update()
     {
+        // Handle rotation input: R rotates 90° clockwise
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            currentRotationIndex = (currentRotationIndex + 1) % 4;
+
+            if (previewInstance != null)
+                previewInstance.transform.rotation = rotationTable[currentRotationIndex];
+        }
+
         BuildBlock current = GetActiveBlock();
         if (current != lastSelectedBlock)
         {
@@ -199,6 +250,9 @@ public class GridPlacementSystem : MonoBehaviour
             return;
 
         previewInstance = Instantiate(prefab);
+        // Apply current rotation to preview
+        previewInstance.transform.rotation = rotationTable[currentRotationIndex];
+
         previewRenderer = previewInstance.GetComponentInChildren<SpriteRenderer>();
         if (previewRenderer != null)
         {
@@ -1191,7 +1245,7 @@ public class GridPlacementSystem : MonoBehaviour
         GameObject placed = Instantiate(
             prefab,
             new Vector3(cellCenter.x, cellCenter.y, placementZ),
-            Quaternion.identity
+            rotationTable[currentRotationIndex] // apply current rotation to placed object
         );
 
         if (placementParent != null)
@@ -1206,6 +1260,11 @@ public class GridPlacementSystem : MonoBehaviour
         }
         po.blockDefinition = blockDef;
 
+        if (powerHandler != null && po != null)
+        {
+            powerHandler.RegisterPlaceable(po);
+        }
+
         StartBuildAnimation(placed);
 
         placedObjects[cellX, cellY] = placed;
@@ -1217,6 +1276,12 @@ public class GridPlacementSystem : MonoBehaviour
         if (obj != null)
         {
             var po = obj.GetComponent<PlaceableObject>();
+
+            if (po != null && powerHandler != null)
+            {
+                powerHandler.UnregisterPlaceable(po);
+            }
+
             if (po != null && po.blockDefinition != null && playerInventory != null)
             {
                 playerInventory.TryAddBlock(po.blockDefinition, 1);

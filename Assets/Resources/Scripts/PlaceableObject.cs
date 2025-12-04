@@ -53,6 +53,10 @@ public class PlaceableObject : MonoBehaviour
     [Tooltip("If true, this object can be rotated in 90� steps on the grid (not wired up yet).")]
     public bool canRotate = true;
 
+    [Header("Power")]
+    [Tooltip("Net power per second this block contributes. Positive = generates, Negative = consumes.")]
+    public float powerUsage = 0f;
+
     public IEnumerable<Vector2Int> GetLocalFootprint()
     {
         for (int x = 0; x < sizeInCells.x; x++)

@@ -5,6 +5,8 @@ public class InfoSwitch : MonoBehaviour
 {
     [Header("References")]
     public ResizableGridCamera gridCamera;
+    public PowerHandler powerHandler;
+    public GridPlacementSystem gridPlacementSystem;
     public TextMeshProUGUI infoText;
     private RectTransform infoRect;
 
@@ -12,7 +14,7 @@ public class InfoSwitch : MonoBehaviour
     [Tooltip("Base power draw per cell (positive = consumes power)")]
     public float basePowerDrawPerCell = 1f;
 
-    [Tooltip("Temporary debug value: flat power generated per cell (will later come from towers)")]
+    [Tooltip("Temporary debug value: flat power generated per cell (used only if PowerHandler missing)")]
     public float debugGeneratedPowerPerCell = 0f;
 
     // 0 = show cell info, 1 = blank (can add more modes later)
@@ -20,8 +22,27 @@ public class InfoSwitch : MonoBehaviour
 
     private void Start()
     {
+        infoRect = infoText != null ? infoText.GetComponent<RectTransform>() : null;
+
+        if (powerHandler == null)
+        {
+            powerHandler = FindObjectOfType<PowerHandler>();
+            if (powerHandler == null)
+            {
+                Debug.LogWarning("InfoSwitch: No PowerHandler found. Falling back to debug power values.");
+            }
+        }
+
+        if (gridPlacementSystem == null)
+        {
+            gridPlacementSystem = FindObjectOfType<GridPlacementSystem>();
+            if (gridPlacementSystem == null)
+            {
+                Debug.LogWarning("InfoSwitch: No GridPlacementSystem found. Per-cell tower power will be 0.");
+            }
+        }
+
         UpdateInfoDisplay(force: true);
-        infoRect = infoText.GetComponent<RectTransform>();
     }
 
     private void Update()
@@ -35,6 +56,7 @@ public class InfoSwitch : MonoBehaviour
         // Continuously update when we're in a mode that shows live data
         UpdateInfoDisplay(force: false);
 
+        // Make the info follow the mouse
         if (infoRect != null)
         {
             Vector2 pos;
@@ -74,30 +96,61 @@ public class InfoSwitch : MonoBehaviour
             }
 
             // Cell count
-            int cellsX = gridCamera.VisibleCellsX;
-            int cellsY = gridCamera.VisibleCellsY;
             int total = gridCamera.VisibleCellsTotal;
-
             string cellCountLine = $"Cell Count: {total}";
 
-            // Net power per cell = generated - draw (can be negative if more is drawn than generated)
-            float netPerCell = debugGeneratedPowerPerCell - basePowerDrawPerCell;
+            // --- Global net power ---
 
-            // Net power for all currently visible cells
-            float netPower = total * netPerCell;
-            string netPowerLine = $"{netPower:0.##} p/s";
+            // Use the same value PowerHandler actually uses.
+            float netPower = 0f;
+            if (powerHandler != null)
+            {
+                netPower = powerHandler.LastNetPerSecond;
+            }
+            else
+            {
+                // Fallback approximation if PowerHandler is missing
+                float fallbackNetPerCell = debugGeneratedPowerPerCell - basePowerDrawPerCell;
+                netPower = total * fallbackNetPerCell;
+            }
 
-            // Net individual cell power under mouse cursor
+            string netPowerLine = $"Net Power: {netPower:0.##} p/s";
+
+            // --- Individual hovered cell power ---
+
             int hoveredX, hoveredY;
             string hoveredLine;
             if (TryGetHoveredCell(out hoveredX, out hoveredY))
             {
-                float hoveredNetPower = netPerCell; // placeholder until we query real per-cell tower data
-                hoveredLine = $"[{hoveredX}, {hoveredY}]: {hoveredNetPower:0.##} p/s";
+                // Base drain per cell (positive = consumes)
+                float cellBaseDraw = basePowerDrawPerCell;
+                if (powerHandler != null)
+                {
+                    cellBaseDraw = powerHandler.powerUsePerCellPerSecond;
+                }
+
+                // Sum of block powerUsage on THIS cell
+                float towerPowerOnCell = 0f;
+                if (gridPlacementSystem != null)
+                {
+                    var po = gridPlacementSystem.GetPlaceableAtCell(hoveredX, hoveredY);
+                    if (po != null)
+                    {
+                        towerPowerOnCell += po.powerUsage;
+                    }
+                }
+
+                // Net cell power = generators - base drain
+                float hoveredNetPower = towerPowerOnCell - cellBaseDraw;
+
+                // Example:
+                // base = 0.025, no block => 0 - 0.025 = -0.025
+                // base = 0.025, block = 100 => 100 - 0.025 = 99.975
+                hoveredLine = $"Cell [{hoveredX}, {hoveredY}]: {hoveredNetPower:0.###} p/s";
             }
             else
             {
-                hoveredLine = "Net Individual Cell Power: (no cell under cursor)";
+                hoveredLine = "Cell: (no cell under cursor)";
             }
 
             infoText.text = cellCountLine + " | " + netPowerLine + " | " + hoveredLine;

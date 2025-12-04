@@ -6,20 +6,46 @@ public class PowerHandler : MonoBehaviour
     public ResizableGridCamera gridCamera;
 
     public float startingPower = 1000f;
-    public float powerUsePerCellPerSecond = 1f;
-    public UnityEngine.UI.Slider powerSlider;
 
+    // Base power draw per *visible* grid cell per second (positive = consumes power)
+    public float powerUsePerCellPerSecond = 1f;
+
+    public UnityEngine.UI.Slider powerSlider;
     public UnityEngine.UI.Image powerFillImage;
 
     public Color normalColor = Color.blue;
     public Color lowColor = Color.yellow;
     public Color criticalColor = Color.red;
     public float colorFadeSpeed = 5f;
+
     private float currentPower;
+
+    // Latest computed rates (per second) for UI / debug queries
+    public float LastTowerNetPerSecond { get; private set; }
+    public float LastCellDrainPerSecond { get; private set; }
+    public float LastNetPerSecond { get; private set; }
+
+    // Track all placeable objects that affect power
+    private readonly System.Collections.Generic.List<PlaceableObject> trackedPlaceables =
+        new System.Collections.Generic.List<PlaceableObject>();
+
+    public void RegisterPlaceable(PlaceableObject placeable)
+    {
+        if (placeable == null) return;
+        if (!trackedPlaceables.Contains(placeable))
+            trackedPlaceables.Add(placeable);
+    }
+
+    public void UnregisterPlaceable(PlaceableObject placeable)
+    {
+        if (placeable == null) return;
+        trackedPlaceables.Remove(placeable);
+    }
 
     void Start()
     {
         currentPower = startingPower;
+
         if (powerSlider != null)
         {
             powerSlider.maxValue = startingPower;
@@ -31,10 +57,33 @@ public class PowerHandler : MonoBehaviour
     {
         if (gridCamera == null) return;
 
-        // Power drain based on visible cells
-        float drainAmount = gridCamera.VisibleCellsTotal * powerUsePerCellPerSecond * Time.deltaTime;
-        currentPower -= drainAmount;
-        currentPower = Mathf.Max(currentPower, 0f);
+        // 1) Base power drain from visible cells
+        float cellDrainPerSecond = gridCamera.VisibleCellsTotal * powerUsePerCellPerSecond;
+        LastCellDrainPerSecond = cellDrainPerSecond;
+
+        // 2) Add up all block power usage
+        float towerNetPerSecond = 0f;
+        for (int i = trackedPlaceables.Count - 1; i >= 0; i--)
+        {
+            var p = trackedPlaceables[i];
+            if (p == null)
+            {
+                trackedPlaceables.RemoveAt(i);
+                continue;
+            }
+
+            // Positive = generates power, Negative = consumes power
+            towerNetPerSecond += p.powerUsage;
+        }
+        LastTowerNetPerSecond = towerNetPerSecond;
+
+        // 3) Net power change = blocks - cell cost
+        float netPerSecond = towerNetPerSecond - cellDrainPerSecond;
+        LastNetPerSecond = netPerSecond;
+
+        // Apply over time
+        currentPower += netPerSecond * Time.deltaTime;
+        currentPower = Mathf.Clamp(currentPower, 0f, startingPower);
 
         if (powerSlider != null)
         {
@@ -61,8 +110,11 @@ public class PowerHandler : MonoBehaviour
                 targetColor = Color.Lerp(criticalColor, lowColor, t);
             }
 
-            powerFillImage.color = Color.Lerp(powerFillImage.color, targetColor, Time.deltaTime * colorFadeSpeed);
+            powerFillImage.color = Color.Lerp(
+                powerFillImage.color,
+                targetColor,
+                Time.deltaTime * colorFadeSpeed
+            );
         }
-
     }
 }
