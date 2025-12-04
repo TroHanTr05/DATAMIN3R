@@ -3,12 +3,14 @@ using UnityEngine;
 
 public class PlaceableObject : MonoBehaviour
 {
-    // ========== LINK TO BLOCK DEFINITION ==========
+    // ----------------------------------------------------------
+    // EXISTING FIELDS (UNCHANGED)
+    // ----------------------------------------------------------
+
     [Header("Block Definition")]
     [Tooltip("Which BuildBlock definition this instance represents (used for refunds, UI, etc).")]
     public BuildBlock blockDefinition;
 
-    // ========== ID / CATEGORY ==========
     public enum PlaceableType
     {
         Generic,
@@ -20,20 +22,6 @@ public class PlaceableObject : MonoBehaviour
         Power,
         Decoration
     }
-    
-    // Conveyor System
-    public enum ConveyorDirection
-    {
-        Up,
-        Down,
-        Left,
-        Right
-    }
-    
-    [Header("Conveyor Settings")]
-    public ConveyorDirection conveyorDirection;
-    public float conveyorSpeed = 1f;  // tiles per second
-
 
     [Header("Identity")]
     [Tooltip("Human-readable name for debugging / overrides; usually comes from BuildBlock.")]
@@ -42,7 +30,10 @@ public class PlaceableObject : MonoBehaviour
     [Tooltip("High-level category that can drive which options / UI are available.")]
     public PlaceableType type = PlaceableType.Generic;
 
-    // ========== GRID FOOTPRINT ==========
+    [Header("Breaking")]
+    [Tooltip("Seconds of continuous erase input required to break/pick up this block.")]
+    public float breakTimeSeconds = 0.25f;
+
     [Header("Grid Footprint")]
     [Tooltip("Size in grid cells (width = X, height = Y). 1x1 is a single tile.")]
     public Vector2Int sizeInCells = Vector2Int.one;
@@ -53,7 +44,6 @@ public class PlaceableObject : MonoBehaviour
     )]
     public Vector2Int anchorCell = Vector2Int.zero;
 
-    // ========== FLAGS / BEHAVIOR HINTS ==========
     [Header("Behavior Flags")]
     [Tooltip("If true, this object blocks other placeables from using the same cells.")]
     public bool blocksPlacement = true;
@@ -64,10 +54,8 @@ public class PlaceableObject : MonoBehaviour
     [Tooltip("If true, allow this object to overlap other placeables (for decals, pipes over belts, etc.).")]
     public bool canOverlapOtherPlaceables = false;
 
-    [Tooltip("If true, this object can be rotated in 90� steps on the grid (not wired up yet).")]
+    [Tooltip("If true, this object can be rotated in 90° steps on the grid (not wired up yet).")]
     public bool canRotate = true;
-
-    // ========== FOOTPRINT HELPERS (no rotation yet) ==========
 
     public IEnumerable<Vector2Int> GetLocalFootprint()
     {
@@ -88,56 +76,52 @@ public class PlaceableObject : MonoBehaviour
             yield return anchorGridCell + offset;
         }
     }
-    
-    // Allows buildings to recieve items
-    [Header("Item IO")]
-    public ItemStack inputBuffer;   // holds 0 or 1 item
-    public ItemStack outputBuffer;  // used by machines to output items
-    
-    public bool CanReceiveItem(Item item)
+
+    // ----------------------------------------------------------
+    // NEW SECTION #1 — CONVEYOR SETTINGS
+    // (Required for conveyor logic, safe for all other blocks)
+    // ----------------------------------------------------------
+
+    [Header("Conveyor Settings")]
+    public ConveyorDirection conveyorDirection = ConveyorDirection.Right;
+    public float conveyorSpeed = 1f;
+
+    public enum ConveyorDirection
     {
-        // Simple rule: can accept item if input buffer is empty
-        return inputBuffer == null;
-    }
-    
-    public void ReceiveItem(Item item)
-    {
-        inputBuffer = new ItemStack(item, 1);
-    }
-    
-    public bool TryConsumeInput(out Item item)
-    {
-        if (inputBuffer != null)
-        {
-            item = inputBuffer.item;
-            inputBuffer = null;
-            return true;
-        }
-    
-        item = null;
-        return false;
+        Up,
+        Down,
+        Left,
+        Right
     }
 
-    // Conveyor transportation on mined materials    
+    // ----------------------------------------------------------
+    // NEW SECTION #2 — ITEM IO BUFFERS (for miners / machines)
+    // Does not affect conveyors unless explicitly used.
+    // ----------------------------------------------------------
+
+    [Header("Item IO Buffers")]
+    public ItemStack inputBuffer;
+    public ItemStack outputBuffer;
+
+    // ----------------------------------------------------------
+    // NEW SECTION #3 — OPTIONAL ITEM RENDERER (not required)
+    // Conveyor.cs uses its own child sprite ("ItemSprite")
+    // This simply provides a place to store a reference if needed.
+    // ----------------------------------------------------------
+
+    [Header("Visuals (Optional)")]
+    public SpriteRenderer itemRenderer;   // safe optional reference
+    
     public void TryOutputToConveyor()
     {
         if (outputBuffer == null)
             return;
-            
-        Conveyor c = FindAdjacentConveyor();
-        if (c != null && c.carriedItem == null)
-        {
-            c.carriedItem = outputBuffer;
-            outputBuffer = null;
-        }
-    }
-    
-    private Conveyor FindAdjacentConveyor()
-    {
-        Vector2Int myCell = GridPlacementSystem.Instance.CellFromWorld(transform.position);
 
-        // Check 4 directions
-        Vector2Int[] dirs = new Vector2Int[]
+        // Get my grid cell
+        Vector2Int myCell = GridPlacementSystem.Instance.WorldToCellPosition(transform.position);
+
+        // Check 4 directions around me
+        Vector2Int[] dirs =
         {
             new Vector2Int(1, 0),
             new Vector2Int(-1, 0),
@@ -147,17 +131,23 @@ public class PlaceableObject : MonoBehaviour
 
         foreach (var d in dirs)
         {
-            Vector2Int c = myCell + d;
-            if (!GridPlacementSystem.Instance.IsCellInsideGrid(c)) continue;
+            Vector2Int neighbor = myCell + d;
 
-            GameObject obj = GridPlacementSystem.Instance.GetObjectAtCell(c);
+            GameObject obj = GridPlacementSystem.Instance.GetPlacedObject(neighbor);
             if (obj == null) continue;
 
             Conveyor conv = obj.GetComponent<Conveyor>();
-            if (conv != null) return conv;
-        }
+            if (conv == null) continue;
 
-        return null;
+            // Only output if conveyor is empty
+            if (conv.carriedItem == null)
+            {
+                conv.carriedItem = outputBuffer;
+                outputBuffer = null;
+                return;
+            }
+        }
     }
+
     
 }

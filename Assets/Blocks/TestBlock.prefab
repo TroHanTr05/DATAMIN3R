@@ -104,11 +104,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlaceableObject
   blockDefinition: {fileID: 11400000, guid: 4665b4f3dcc1ad6438d8ffbc9817d3f2, type: 2}
+  conveyorDirection: 0
+  conveyorSpeed: 1
+  carriedItem:
+    item: {fileID: 0}
+    amount: 0
+  heldRenderer: {fileID: 0}
   displayNameOverride: TestBlcok
-  type: 0
+  type: 3
   sizeInCells: {x: 1, y: 1}
   anchorCell: {x: 0, y: 0}
   blocksPlacement: 1
   blocksMovement: 1
   canOverlapOtherPlaceables: 0
   canRotate: 1
+  inputBuffer:
+    item: {fileID: 0}
+    amount: 0
+  outputBuffer:
+    item: {fileID: 0}
+    amount: 1

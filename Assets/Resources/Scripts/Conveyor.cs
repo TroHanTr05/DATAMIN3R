@@ -2,106 +2,76 @@ using UnityEngine;
 
 public class Conveyor : MonoBehaviour
 {
-    public PlaceableObject po;
-    public ItemStack carriedItem;  // 0 or 1 item on belt
-    public SpriteRenderer itemRenderer; // Sprite for what's on Conveyors
+    public PlaceableObject.ConveyorDirection direction = PlaceableObject.ConveyorDirection.Up;
+    public GameObject carriedBlock;
 
-    private float moveProgress = 0f; // 0 → 1 tile progress
-
-    private void Awake()
-    {
-        po = GetComponent<PlaceableObject>();
-    }
-
-    private void Update()
-    {
-        ProcessConveyor();
-    }
-
-    private void ProcessConveyor()
-    {
-        if (carriedItem == null)
-            return;
-
-        moveProgress += po.conveyorSpeed * Time.deltaTime;
-
-        // When progress >= 1 tile, attempt to move to neighbor
-        if (moveProgress >= 1f)
-        {
-            if (TryTransferToNext())
-            {
-                carriedItem = null;
-                moveProgress = 0f;
-            }
-        }
-    }
-
-    private bool TryTransferToNext()
-    {
-        Vector2Int myCell = GridPlacementSystem.Instance.WorldToCellPosition(transform.position);
-        Vector2Int next = GetNextCell(myCell);
-
-        if (!GridPlacementSystem.Instance.IsCellInsideGrid(next))
-            return false;
-
-        GameObject neighbor = GridPlacementSystem.Instance.GetObjectAtCell(next);
-
-        if (neighbor == null)
-            return false;
-
-        var neighborPO = neighbor.GetComponent<PlaceableObject>();
-
-        if (neighborPO == null)
-            return false;
-
-        // If next is conveyor → hand off item
-        if (neighborPO.type == PlaceableObject.PlaceableType.Conveyor)
-        {
-            Conveyor nextConv = neighbor.GetComponent<Conveyor>();
-            if (nextConv != null && nextConv.carriedItem == null)
-            {
-                nextConv.carriedItem = carriedItem;
-                return true;
-            }
-        }
-
-        // If next is machine / chest → try delivering
-        if (neighborPO.CanReceiveItem(carriedItem.item))
-        {
-            neighborPO.ReceiveItem(carriedItem.item);
-            return true;
-        }
-
-        return false;
-    }
-
-    private Vector2Int GetNextCell(Vector2Int cell)
-    {
-        switch (po.conveyorDirection)
-        {
-            case PlaceableObject.ConveyorDirection.Up:
-                return cell + new Vector2Int(0, +1);
-            case PlaceableObject.ConveyorDirection.Down:
-                return cell + new Vector2Int(0, -1);
-            case PlaceableObject.ConveyorDirection.Left:
-                return cell + new Vector2Int(-1, 0);
-            case PlaceableObject.ConveyorDirection.Right:
-                return cell + new Vector2Int(+1, 0);
-        }
-        return cell;
-    }
-
+    GridPlacementSystem grid;
     
-    private void LateUpdate()
+    // --------------------
+// ITEM MODE (normal game items)
+// --------------------
+    [Header("Item Conveyor")]
+    public ItemStack carriedItem = null;
+    
+    void Start()
     {
-        if (carriedItem != null)
+        grid = GridPlacementSystem.Instance;
+    }
+
+    void Update()
+    {
+        MoveBlock();
+    }
+
+    void MoveBlock()
+    {
+        Vector2Int myCell = grid.WorldToCellPosition(transform.position);
+        Vector2Int dir = Dir();
+        Vector2Int behind = myCell - dir;
+        Vector2Int ahead  = myCell + dir;
+
+        // 1) If not carrying a block, try to pull one from behind
+        if (carriedBlock == null)
         {
-            itemRenderer.sprite = carriedItem.item.icon;
-            itemRenderer.enabled = true;
+            GameObject b = grid.GetObjectAtCell(behind);
+            if (b != null && b.GetComponent<Conveyor>() == null)
+            {
+                carriedBlock = b;
+                grid.ClearCell(behind);
+                carriedBlock.transform.position = transform.position;
+            }
+            else return;
         }
-        else
+
+        // 2) Try to move carriedBlock forward
+        GameObject aheadObj = grid.GetObjectAtCell(ahead);
+
+        // If next space is empty → move block into that cell
+        if (aheadObj == null)
         {
-            itemRenderer.enabled = false;
+            grid.MovePlacedObject(carriedBlock, ahead);
+            carriedBlock = null;
+            return;
         }
+
+        // If next is conveyor → hand block off if it’s free
+        Conveyor next = aheadObj.GetComponent<Conveyor>();
+        if (next != null && next.carriedBlock == null)
+        {
+            next.carriedBlock = carriedBlock;
+            carriedBlock = null;
+        }
+    }
+
+    Vector2Int Dir()
+    {
+        return direction switch
+        {
+            PlaceableObject.ConveyorDirection.Up => new Vector2Int(0, 1),
+            PlaceableObject.ConveyorDirection.Down => new Vector2Int(0, -1),
+            PlaceableObject.ConveyorDirection.Left => new Vector2Int(-1, 0),
+            PlaceableObject.ConveyorDirection.Right => new Vector2Int(1, 0),
+            _ => Vector2Int.zero
+        };
     }
 }
