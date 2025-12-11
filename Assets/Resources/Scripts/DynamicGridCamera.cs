@@ -62,12 +62,58 @@ public class ResizableGridCamera : MonoBehaviour
     private float zoomFactor = 1f;
 
     private Vector2 initialCenter;
-
+    
     private bool isPanning = false;
     private Vector3 panStartCamPos;
     private Vector2 panStartMouseScreen;
 
     public float PixelsPerCell => cellSize / unitsPerPixel;
+
+    public int VisibleCellsX { get; private set; }
+    public int VisibleCellsY { get; private set; }
+    public int VisibleCellsTotal => VisibleCellsX * VisibleCellsY;
+    
+
+    public bool TryGetMouseCell(out int cellX, out int cellY)
+    {
+        cellX = 0;
+        cellY = 0;
+
+        if (cam == null)
+            cam = GetComponent<Camera>();
+
+        if (gridWidth <= 0 || gridHeight <= 0 || cellSize <= 0f)
+            return false;
+
+        Vector3 mouseScreen = Input.mousePosition;
+
+        // Assume the grid lies on z = 0, matching the grid drawing in OnPostRender
+        float planeZ = 0f;
+        float dist = planeZ - cam.transform.position.z;
+        Vector3 mouseWorld = cam.ScreenToWorldPoint(new Vector3(mouseScreen.x, mouseScreen.y, dist));
+
+        float totalWidth = gridWidth * cellSize;
+        float totalHeight = gridHeight * cellSize;
+
+        float left = -totalWidth * 0.5f;
+        float bottom = -totalHeight * 0.5f;
+
+        float localX = mouseWorld.x - left;
+        float localY = mouseWorld.y - bottom;
+
+        if (localX < 0f || localY < 0f)
+            return false;
+
+        int cx = Mathf.FloorToInt(localX / cellSize);
+        int cy = Mathf.FloorToInt(localY / cellSize);
+
+        if (cx < 0 || cx >= gridWidth || cy < 0 || cy >= gridHeight)
+            return false;
+
+        cellX = cx;
+        cellY = cy;
+        return true;
+    }
 
     private void OnValidate()
     {
@@ -120,13 +166,13 @@ public class ResizableGridCamera : MonoBehaviour
 
     private void HandlePanInput()
     {
-        if (Input.GetMouseButtonDown(2))
+        if (Input.GetMouseButtonDown(2) || (Input.GetMouseButtonDown(0) && (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))))
         {
             isPanning = true;
             panStartCamPos = transform.position;
             panStartMouseScreen = Input.mousePosition;
         }
-        else if (Input.GetMouseButtonUp(2))
+        else if (Input.GetMouseButtonUp(2) || Input.GetMouseButtonUp(0))
         {
             isPanning = false;
         }
@@ -269,6 +315,21 @@ public class ResizableGridCamera : MonoBehaviour
         float finalHalfHeight = finalOrthoSize;
         float finalHalfWidth = finalHalfHeight * cam.aspect;
 
+        // Compute how many grid cells are currently visible
+        float visibleWorldHeight = finalOrthoSize * 2f;
+        float visibleWorldWidth = visibleWorldHeight * cam.aspect;
+
+        if (cellSize > 0f)
+        {
+            VisibleCellsX = Mathf.CeilToInt(visibleWorldWidth / cellSize);
+            VisibleCellsY = Mathf.CeilToInt(visibleWorldHeight / cellSize);
+        }
+        else
+        {
+            VisibleCellsX = 0;
+            VisibleCellsY = 0;
+        }
+
         float maxOffsetX = Mathf.Max(0f, baseHalfWidth - finalHalfWidth);
         float maxOffsetY = Mathf.Max(0f, baseHalfHeight - finalHalfHeight);
 
@@ -283,8 +344,27 @@ public class ResizableGridCamera : MonoBehaviour
         pos.y = Mathf.Clamp(pos.y, minY, maxY);
 
         transform.position = pos;
-    }
+        
+        // --- NEW: update visible cell counts based on current view ---
+        if (cellSize > 0f)
+        {
+            float viewHalfHeight = cam.orthographicSize;
+            float viewHalfWidth  = viewHalfHeight * cam.aspect;
 
+            float viewHeight = viewHalfHeight * 2f;
+            float viewWidth  = viewHalfWidth  * 2f;
+
+            VisibleCellsY = Mathf.CeilToInt(viewHeight / cellSize);
+            VisibleCellsX = Mathf.CeilToInt(viewWidth  / cellSize);
+        }
+        else
+        {
+            // Fallback: assume whole grid visible
+            VisibleCellsX = gridWidth;
+            VisibleCellsY = gridHeight;
+        }
+    }
+    
     private void OnPostRender()
     {
         if (gridMaterial == null) return;

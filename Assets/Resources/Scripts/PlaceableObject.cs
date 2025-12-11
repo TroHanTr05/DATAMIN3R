@@ -3,10 +3,6 @@ using UnityEngine;
 
 public class PlaceableObject : MonoBehaviour
 {
-    // ----------------------------------------------------------
-    // EXISTING FIELDS (UNCHANGED)
-    // ----------------------------------------------------------
-
     [Header("Block Definition")]
     [Tooltip("Which BuildBlock definition this instance represents (used for refunds, UI, etc).")]
     public BuildBlock blockDefinition;
@@ -21,6 +17,14 @@ public class PlaceableObject : MonoBehaviour
         Storage,
         Power,
         Decoration
+    }
+    
+    public enum ConveyorDirection
+    {
+        Up,
+        Right,
+        Down,
+        Left
     }
 
     [Header("Identity")]
@@ -54,8 +58,12 @@ public class PlaceableObject : MonoBehaviour
     [Tooltip("If true, allow this object to overlap other placeables (for decals, pipes over belts, etc.).")]
     public bool canOverlapOtherPlaceables = false;
 
-    [Tooltip("If true, this object can be rotated in 90° steps on the grid (not wired up yet).")]
+    [Tooltip("If true, this object can be rotated in 90� steps on the grid (not wired up yet).")]
     public bool canRotate = true;
+
+    [Header("Power")]
+    [Tooltip("Net power per second this block contributes. Positive = generates, Negative = consumes.")]
+    public float powerUsage = 0f;
 
     public IEnumerable<Vector2Int> GetLocalFootprint()
     {
@@ -76,78 +84,4 @@ public class PlaceableObject : MonoBehaviour
             yield return anchorGridCell + offset;
         }
     }
-
-    // ----------------------------------------------------------
-    // NEW SECTION #1 — CONVEYOR SETTINGS
-    // (Required for conveyor logic, safe for all other blocks)
-    // ----------------------------------------------------------
-
-    [Header("Conveyor Settings")]
-    public ConveyorDirection conveyorDirection = ConveyorDirection.Right;
-    public float conveyorSpeed = 1f;
-
-    public enum ConveyorDirection
-    {
-        Up,
-        Down,
-        Left,
-        Right
-    }
-
-    // ----------------------------------------------------------
-    // NEW SECTION #2 — ITEM IO BUFFERS (for miners / machines)
-    // Does not affect conveyors unless explicitly used.
-    // ----------------------------------------------------------
-
-    [Header("Item IO Buffers")]
-    public ItemStack inputBuffer;
-    public ItemStack outputBuffer;
-
-    // ----------------------------------------------------------
-    // NEW SECTION #3 — OPTIONAL ITEM RENDERER (not required)
-    // Conveyor.cs uses its own child sprite ("ItemSprite")
-    // This simply provides a place to store a reference if needed.
-    // ----------------------------------------------------------
-
-    [Header("Visuals (Optional)")]
-    public SpriteRenderer itemRenderer;   // safe optional reference
-    
-    public void TryOutputToConveyor()
-    {
-        if (outputBuffer == null)
-            return;
-
-        // Get my grid cell
-        Vector2Int myCell = GridPlacementSystem.Instance.WorldToCellPosition(transform.position);
-
-        // Check 4 directions around me
-        Vector2Int[] dirs =
-        {
-            new Vector2Int(1, 0),
-            new Vector2Int(-1, 0),
-            new Vector2Int(0, 1),
-            new Vector2Int(0, -1)
-        };
-
-        foreach (var d in dirs)
-        {
-            Vector2Int neighbor = myCell + d;
-
-            GameObject obj = GridPlacementSystem.Instance.GetPlacedObject(neighbor);
-            if (obj == null) continue;
-
-            Conveyor conv = obj.GetComponent<Conveyor>();
-            if (conv == null) continue;
-
-            // Only output if conveyor is empty
-            if (conv.carriedItem == null)
-            {
-                conv.carriedItem = outputBuffer;
-                outputBuffer = null;
-                return;
-            }
-        }
-    }
-
-    
 }

@@ -1,17 +1,32 @@
-﻿﻿using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GridPlacementSystem : MonoBehaviour
 {
-    public static GridPlacementSystem Instance;
+    // Simple singleton so conveyors / storage can find the grid
+    public static GridPlacementSystem Instance { get; private set; }
 
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning("Multiple GridPlacementSystem instances detected; using the first one.");
+            return;
+        }
+
+        Instance = this;
+    }
+    
     [Header("References")]
     [Tooltip("Grid camera that defines the grid size, cell size, etc.")]
     public ResizableGridCamera gridCamera;
 
     [Tooltip("Camera used to convert mouse position to world space. Defaults to Camera.main if null.")]
     public Camera worldCamera;
+
+    [Tooltip("Central power system that tracks net power from placed blocks.")]
+    public PowerHandler powerHandler;
 
     [Header("Inventory / Catalog")]
     [Tooltip("Runtime player inventory with counts per block.")]
@@ -88,6 +103,15 @@ public class GridPlacementSystem : MonoBehaviour
     private readonly List<GameObject> areaPreviewPool = new List<GameObject>();
     private readonly Dictionary<GameObject, Color> eraseHighlightOriginalColors = new Dictionary<GameObject, Color>();
 
+    // Rotation state for preview & placed blocks (0,90,180,270 degrees clockwise)
+    private int currentRotationIndex = 0;
+    private static readonly Quaternion[] rotationTable = {
+        Quaternion.Euler(0,0,0),
+        Quaternion.Euler(0,0,90),
+        Quaternion.Euler(0,0,180),
+        Quaternion.Euler(0,0,270)
+    };
+
     [Header("Build / Break Settings")]
     [Tooltip("Default build time in seconds if a placeable doesn't define its own build time.")]
     public float defaultBuildTimeSeconds = 0.25f;
@@ -108,12 +132,6 @@ public class GridPlacementSystem : MonoBehaviour
     private bool isMultiEraseActive = false;
 
     private BuildBlock lastSelectedBlock;
-    
-    private void Awake()
-    {
-        Instance = this;
-    }
-
 
     void Start()
     {
@@ -138,6 +156,15 @@ public class GridPlacementSystem : MonoBehaviour
             }
         }
 
+        if (powerHandler == null)
+        {
+            powerHandler = FindObjectOfType<PowerHandler>();
+            if (powerHandler == null)
+            {
+                Debug.LogWarning("GridPlacementSystem: No PowerHandler found. Power will not be tracked for placed blocks.");
+            }
+        }
+
         totalWidth = gridCamera.gridWidth * gridCamera.cellSize;
         totalHeight = gridCamera.gridHeight * gridCamera.cellSize;
 
@@ -151,6 +178,15 @@ public class GridPlacementSystem : MonoBehaviour
 
     void Update()
     {
+        // Handle rotation input: R rotates 90° clockwise
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            currentRotationIndex = (currentRotationIndex + 1) % 4;
+
+            if (previewInstance != null)
+                previewInstance.transform.rotation = rotationTable[currentRotationIndex];
+        }
+
         BuildBlock current = GetActiveBlock();
         if (current != lastSelectedBlock)
         {
@@ -207,6 +243,9 @@ public class GridPlacementSystem : MonoBehaviour
             return;
 
         previewInstance = Instantiate(prefab);
+        // Apply current rotation to preview
+        previewInstance.transform.rotation = rotationTable[currentRotationIndex];
+
         previewRenderer = previewInstance.GetComponentInChildren<SpriteRenderer>();
         if (previewRenderer != null)
         {
@@ -1199,7 +1238,7 @@ public class GridPlacementSystem : MonoBehaviour
         GameObject placed = Instantiate(
             prefab,
             new Vector3(cellCenter.x, cellCenter.y, placementZ),
-            Quaternion.identity
+            rotationTable[currentRotationIndex] // apply current rotation to placed object
         );
 
         if (placementParent != null)
@@ -1208,11 +1247,31 @@ public class GridPlacementSystem : MonoBehaviour
         }
 
         var po = placed.GetComponent<PlaceableObject>();
+        
+        // If the placed object is a Conveyor, set its direction based on rotation
+        Conveyor c = placed.GetComponent<Conveyor>();
+        if (c != null)
+        {
+            // Convert currentRotationIndex into a direction
+            switch (currentRotationIndex)
+            {
+                case 0: c.direction = PlaceableObject.ConveyorDirection.Up; break;
+                case 1: c.direction = PlaceableObject.ConveyorDirection.Right; break;
+                case 2: c.direction = PlaceableObject.ConveyorDirection.Down; break;
+                case 3: c.direction = PlaceableObject.ConveyorDirection.Left; break;
+            }
+        }
+        
         if (po == null)
         {
             po = placed.AddComponent<PlaceableObject>();
         }
         po.blockDefinition = blockDef;
+
+        if (powerHandler != null && po != null)
+        {
+            powerHandler.RegisterPlaceable(po);
+        }
 
         StartBuildAnimation(placed);
 
@@ -1225,6 +1284,12 @@ public class GridPlacementSystem : MonoBehaviour
         if (obj != null)
         {
             var po = obj.GetComponent<PlaceableObject>();
+
+            if (po != null && powerHandler != null)
+            {
+                powerHandler.UnregisterPlaceable(po);
+            }
+
             if (po != null && po.blockDefinition != null && playerInventory != null)
             {
                 playerInventory.TryAddBlock(po.blockDefinition, 1);
@@ -1235,24 +1300,6 @@ public class GridPlacementSystem : MonoBehaviour
         }
     }
 
-    public void PlaceObjectSingleCell(GameObject obj, Vector2Int cell)
-    {
-        if (obj == null) return;
-        if (!IsCellInsideGrid(cell)) return;
-
-        // Register object into grid
-        placedObjects[cell.x, cell.y] = obj;
-
-        // Snap object to correct world position
-        obj.transform.position = CellToWorldCenter(cell.x, cell.y);
-    }
-    
-    public void SetObjectAtCell(Vector2Int cell, GameObject obj)
-    {
-        if (!IsInsideGrid(cell)) return;
-        placedObjects[cell.x, cell.y] = obj;
-    }
-    
     private List<Vector2Int> GetRectCells(Vector2Int a, Vector2Int b)
     {
         int minX = Mathf.Min(a.x, b.x);
@@ -1382,6 +1429,53 @@ public class GridPlacementSystem : MonoBehaviour
         float y = bottom + (cellY + 0.5f) * gridCamera.cellSize;
         return new Vector3(x, y, 0f);
     }
+    
+    // --- Public helpers for other systems (Conveyor, Storage, etc.) ---
+
+    /// <summary>
+    /// Convert a world position to a grid cell. Returns (-1, -1) if outside grid.
+    /// </summary>
+    public Vector2Int WorldToCellPosition(Vector3 worldPos)
+    {
+        int cx, cy;
+        if (!WorldToCell(worldPos, out cx, out cy))
+        {
+            return new Vector2Int(-1, -1);
+        }
+        return new Vector2Int(cx, cy);
+    }
+
+    /// <summary>
+    /// Returns true if the cell is inside the grid bounds.
+    /// </summary>
+    public bool IsInsideGrid(Vector2Int cell)
+    {
+        return IsCellInsideGrid(cell);
+    }
+
+    /// <summary>
+    /// Get the raw GameObject stored at a given cell (or null).
+    /// </summary>
+    public GameObject GetObjectAtCell(Vector2Int cell)
+    {
+        if (!IsCellInsideGrid(cell) || placedObjects == null)
+            return null;
+
+        return placedObjects[cell.x, cell.y];
+    }
+
+    /// <summary>
+    /// Clear the object reference at a given cell (does NOT destroy it).
+    /// Useful when conveyors temporarily pick a block up off the grid.
+    /// </summary>
+    public void ClearCell(Vector2Int cell)
+    {
+        if (!IsCellInsideGrid(cell) || placedObjects == null)
+            return;
+
+        placedObjects[cell.x, cell.y] = null;
+    }
+
 
     private void OnDrawGizmosSelected()
     {
@@ -1410,91 +1504,77 @@ public class GridPlacementSystem : MonoBehaviour
                 Gizmos.DrawSphere(c, gridCamera.cellSize * 0.1f);
             }
         }
-    } 
+    }
     
-// =======================================================================
-//  REQUIRED ADDITIONS FOR CONVEYORS & FUTURE ITEM / MINER LOGIC
-// =======================================================================
+    // ---------------------------------------------------------
+    // Extra helpers for conveyors, storage, and InfoSwitch
+    // ---------------------------------------------------------
 
-// Check if a cell is inside the grid
-    public bool IsCellInsideGrid(Vector2Int cell)
-    {
-        return cell.x >= 0 &&
-               cell.x < gridCamera.gridWidth &&
-               cell.y >= 0 &&
-               cell.y < gridCamera.gridHeight;
-    }
-
-// Safe accessor for placedObjects
-    public GameObject GetPlacedObject(Vector2Int cell)
-    {
-        if (!IsCellInsideGrid(cell))
-            return null;
-
-        return placedObjects[cell.x, cell.y];
-    }
-
-// Convert world → cell exactly like conveyor needs
-    public Vector2Int WorldToCellPosition(Vector3 worldPosition)
-    {
-        int cx, cy;
-        if (WorldToCell(worldPosition, out cx, out cy))
-            return new Vector2Int(cx, cy);
-
-        return new Vector2Int(-1, -1); // invalid cell
-    }
-
-// Move a placed GameObject from its old cell to a new cell
-    public void MovePlacedObject(GameObject obj, Vector2Int newCell)
+    /// <summary>
+    /// Simple single–cell placement helper used by conveyors when
+    /// dropping a carried block into an empty grid cell.
+    /// </summary>
+    public void PlaceObjectSingleCell(GameObject obj, Vector2Int cell)
     {
         if (obj == null)
             return;
 
-        // Determine old cell by object position
-        Vector2Int oldCell = WorldToCellPosition(obj.transform.position);
-
-        var po = obj.GetComponent<PlaceableObject>();
-        if (po == null)
+        if (!IsCellInsideGrid(cell))
             return;
 
-        // Clear old footprint
-        foreach (var c in po.GetOccupiedCells(oldCell - po.anchorCell))
-        {
-            if (IsCellInsideGrid(c))
-                placedObjects[c.x, c.y] = null;
-        }
+        // Mark this cell as occupied by the object
+        placedObjects[cell.x, cell.y] = obj;
 
-        // Assign new footprint
-        foreach (var c in po.GetOccupiedCells(newCell))
-        {
-            if (IsCellInsideGrid(c))
-                placedObjects[c.x, c.y] = obj;
-        }
-
-        // Update world position
-        obj.transform.position = CellToWorldCenter(newCell.x, newCell.y);
-    }
-    
-    // ==== COMPATIBILITY WRAPPERS FOR CONVEYOR.cs ====
-
-    public Vector2Int CellFromWorld(Vector3 worldPos)
-    {
-        return WorldToCellPosition(worldPos);
+        // Snap the object to the center of the target cell
+        obj.transform.position = new Vector3(
+            CellToWorldCenter(cell.x, cell.y).x,
+            CellToWorldCenter(cell.x, cell.y).y,
+            placementZ);
+        
+        // Re-register power if needed
+        var po = obj.GetComponent<PlaceableObject>();
+        if (po != null && powerHandler != null)
+            powerHandler.RegisterPlaceable(po);
     }
 
-    public bool IsInsideGrid(Vector2Int cell)
+    /// <summary>
+    /// Directly sets the object reference in a cell without moving it.
+    /// Used by Storage to mark its own cell as occupied after accepting a block.
+    /// </summary>
+    public void SetObjectAtCell(Vector2Int cell, GameObject obj)
     {
-        return IsCellInsideGrid(cell);
+        if (!IsCellInsideGrid(cell))
+            return;
+
+        placedObjects[cell.x, cell.y] = obj;
     }
 
-    public GameObject GetObjectAtCell(Vector2Int cell)
+    /// <summary>
+    /// Returns the PlaceableObject (if any) at the given cell coordinates.
+    /// Used by InfoSwitch for per–cell power readout.
+    /// </summary>
+    public PlaceableObject GetPlaceableAtCell(int cellX, int cellY)
     {
-        return GetPlacedObject(cell);
+        Vector2Int cell = new Vector2Int(cellX, cellY);
+        if (!IsCellInsideGrid(cell))
+            return null;
+
+        GameObject obj = placedObjects[cell.x, cell.y];
+        if (obj == null)
+            return null;
+
+        return obj.GetComponent<PlaceableObject>();
     }
-    
-    public void ClearCell(Vector2Int cell)
+
+    private bool IsCellInsideGrid(Vector2Int cell)
     {
-        placedObjects[cell.x, cell.y] = null;
+        if (placedObjects == null)
+            return false;
+
+        return cell.x >= 0 &&
+               cell.y >= 0 &&
+               cell.x < placedObjects.GetLength(0) &&
+               cell.y < placedObjects.GetLength(1);
     }
 
     

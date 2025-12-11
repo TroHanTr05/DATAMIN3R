@@ -3,11 +3,6 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "Build/Build Block", fileName = "NewBuildBlock")]
 public class BuildBlock : ScriptableObject
 {
-    // ***Added for Power Manager***
-    [Header("Power Settings")]
-    public float powerDrain = 0f;      // negative = consumes power
-    public float powerGeneration = 0f; // positive = creates power
-
     [Header("Identity")]
     [Tooltip("Unique ID string used for save/load & lookups.")]
     public string id = "block_id";
@@ -47,27 +42,13 @@ public class BuildBlock : ScriptableObject
 
     [Tooltip("Optional: Number of output items produced per tick.")]
     public int outputAmount = 1;
-
     public virtual void ProcessTick(PlaceableObject instance)
     {
         switch (category)
         {
             case PlaceableObject.PlaceableType.Miner:
-                // Miner produces resources
-                var po = instance;
-                
-                // If nothing in its output buffer, produce a new item stack
-                if (po.outputBuffer == null)
-                {
-                    Item minedItem = ItemDatabase.GetItem(outputItemId);
-                    if (minedItem != null)
-                    {
-                        po.outputBuffer = new ItemStack(minedItem, outputAmount);
-                    }
-                }
-
-                // Try to push that item stack onto an adjacent conveyor
-                po.TryOutputToConveyor();
+                // Example: Miner produces resources
+                Debug.Log($"{displayName} mined {outputAmount} of {outputItemId}");
                 break;
 
             case PlaceableObject.PlaceableType.Crafter:
@@ -76,7 +57,7 @@ public class BuildBlock : ScriptableObject
                 break;
 
             case PlaceableObject.PlaceableType.Conveyor:
-                // Conveyors would transfer items to adjacent blocks (placeholder)
+                // Conveyors would transfer items to adjacent blocks (simplified placeholder)
                 Debug.Log($"{displayName} moved items forward.");
                 break;
 

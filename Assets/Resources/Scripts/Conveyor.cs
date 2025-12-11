@@ -15,6 +15,9 @@ public class Conveyor : MonoBehaviour
     void Start()
     {
         grid = GridPlacementSystem.Instance;
+        
+        // Ensure the conveyor direction matches its actual rotation in the world.
+        SyncDirectionWithRotation();
     }
 
     void Update()
@@ -25,6 +28,24 @@ public class Conveyor : MonoBehaviour
             PositionCarriedBlock();
     }
 
+    private void SyncDirectionWithRotation()
+    {
+        float angle = transform.eulerAngles.z; // 0, 90, 180, 270
+
+        // Normalize
+        angle = Mathf.Round(angle / 90f) * 90f;
+        angle = (angle + 360f) % 360f;
+
+        switch (angle)
+        {
+            case 0: direction = PlaceableObject.ConveyorDirection.Up; break;
+            case 90: direction = PlaceableObject.ConveyorDirection.Right; break;
+            case 180: direction = PlaceableObject.ConveyorDirection.Down; break;
+            case 270: direction = PlaceableObject.ConveyorDirection.Left; break;
+        }
+    }
+
+    
     private void MoveBlock()
     {
         Vector2Int myCell = grid.WorldToCellPosition(transform.position);
@@ -38,10 +59,19 @@ public class Conveyor : MonoBehaviour
             if (grid.IsInsideGrid(behind))
             {
                 GameObject b = grid.GetObjectAtCell(behind);
-                if (b != null && b.GetComponent<Conveyor>() == null)
+                if (b != null)
                 {
-                    carriedBlock = b;
-                    grid.ClearCell(behind);
+                    // Do NOT pick up conveyors
+                    if (b.GetComponent<Conveyor>() == null)
+                    {
+                        // Optional filter: do not pick up Storage buildings
+                        var po = b.GetComponent<PlaceableObject>();
+                        if (po == null || po.type != PlaceableObject.PlaceableType.Storage)
+                        {
+                            carriedBlock = b;
+                            grid.ClearCell(behind);
+                        }
+                    }
                 }
             }
 
