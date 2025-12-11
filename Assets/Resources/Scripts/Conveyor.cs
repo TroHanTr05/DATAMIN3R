@@ -66,13 +66,31 @@ public class Conveyor : MonoBehaviour
 
         // Case B: conveyor → pass block
         Conveyor next = aheadObj.GetComponent<Conveyor>();
-        if (next != null && next.carriedBlock == null)
+        if (next != null)
         {
-            next.carriedBlock = carriedBlock;
-            carriedBlock = null;
+            if (next.carriedBlock == null)
+            {
+                next.carriedBlock = carriedBlock;
+                carriedBlock = null;
 
-            next.PositionCarriedBlock();
+                next.PositionCarriedBlock();
+            }
+            return; // <-- IMPORTANT CLEAN EXIT
         }
+        
+        // CASE C — Next is storage → store block
+        Storage storage = aheadObj.GetComponent<Storage>();
+        if (storage != null)
+        {
+            if (storage.HasSpace())
+            {
+                storage.AcceptBlock(carriedBlock);
+                carriedBlock = null;   // remove from conveyor inventory
+            }
+
+            return; // whether stored or not, conveyor should stop here
+        }
+
     }
 
     private void PositionCarriedBlock()

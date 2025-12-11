@@ -1247,6 +1247,12 @@ public class GridPlacementSystem : MonoBehaviour
         obj.transform.position = CellToWorldCenter(cell.x, cell.y);
     }
     
+    public void SetObjectAtCell(Vector2Int cell, GameObject obj)
+    {
+        if (!IsInsideGrid(cell)) return;
+        placedObjects[cell.x, cell.y] = obj;
+    }
+    
     private List<Vector2Int> GetRectCells(Vector2Int a, Vector2Int b)
     {
         int minX = Mathf.Min(a.x, b.x);
