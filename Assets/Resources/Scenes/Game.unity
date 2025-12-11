@@ -183,7 +183,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 32.125
+  orthographic size: 12.893921
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -284,12 +284,17 @@ MonoBehaviour:
   previewCanPlaceColor: {r: 0, g: 0.6, b: 1, a: 0.5}
   previewBlockedColor: {r: 1, g: 0, b: 0, a: 0.5}
   continuePastBlockedCells: 1
+  canLineDraw: 1
+  canRectDraw: 1
+  canMultiQueue: 1
   placeMouseButton: 0
   eraseMouseButton: 1
   lineModifierKeyPrimary: 306
   lineModifierKeyAlt: 305
   rectModifierKeyPrimary: 304
   rectModifierKeyAlt: 303
+  defaultBuildTimeSeconds: 0.25
+  defaultBreakTimeSeconds: 0.25
 --- !u!1 &360808878
 GameObject:
   m_ObjectHideFlags: 0
@@ -447,6 +452,50 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1794252143}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &625997238
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 625997240}
+  - component: {fileID: 625997239}
+  m_Layer: 0
+  m_Name: MachineTickSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &625997239
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 625997238}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85a900dd86c4218409bf4b94b80c29b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MachineTickSystem
+--- !u!4 &625997240
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 625997238}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &720691734
 GameObject:
@@ -1061,3 +1110,4 @@ SceneRoots:
   - {fileID: 1794252143}
   - {fileID: 725182412}
   - {fileID: 1344945363}
+  - {fileID: 625997240}

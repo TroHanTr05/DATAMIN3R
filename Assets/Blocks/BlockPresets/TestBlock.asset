@@ -20,9 +20,9 @@ MonoBehaviour:
   icon: {fileID: 0}
   placeablePrefab: {fileID: 8011156027985253502, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
   previewPrefab: {fileID: 8011156027985253502, guid: 34c3f43881b1afc429f4febea1c6964b, type: 3}
-  category: 0
+  category: 3
   tickRate: 1
-  outputItemId: 
+  outputItemId: iron_ore
   inputItemId: 
   inputAmount: 1
   outputAmount: 1

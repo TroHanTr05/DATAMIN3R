@@ -18,8 +18,8 @@ MonoBehaviour:
   displayName: ConveyorBlock
   description: Conveyor Belt
   icon: {fileID: 0}
-  placeablePrefab: {fileID: 7518936388542600754, guid: ff60adf98f08232428a92b3dca427724, type: 3}
-  previewPrefab: {fileID: 7518936388542600754, guid: ff60adf98f08232428a92b3dca427724, type: 3}
+  placeablePrefab: {fileID: 3596221013234035237, guid: ff60adf98f08232428a92b3dca427724, type: 3}
+  previewPrefab: {fileID: 3596221013234035237, guid: ff60adf98f08232428a92b3dca427724, type: 3}
   category: 2
   tickRate: 1
   outputItemId: 
